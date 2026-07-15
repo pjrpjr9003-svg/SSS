@@ -2109,7 +2109,7 @@ function loadForm(code) {
 ===================================================== */
 var LS_SAVED = 'daegi_saved_v1';
 var LS_SIGS = 'daegi_sigs_v1';
-window.APP_VERSION = 'sig-fix-v20-sigupdate';  /* 서명 불러오기 수정본 표식 */
+window.APP_VERSION = 'sig-fix-v21-debug';  /* 서명 불러오기 수정본 표식 */
 
 function saveSigs(id, sigs) {
   try {
@@ -2699,6 +2699,12 @@ function confirmSign() {
   applySignPreview(currentSignTarget, svgStr);
   closeSignModal();
 
+  /* ── 디버그: 저장 경로 추적 (문제 해결 후 제거) ── */
+  var _dbg = [];
+  _dbg.push('대상=' + currentSignTarget);
+  _dbg.push('currentCode=' + currentCode);
+  _dbg.push('currentPeriod=' + currentPeriod + ' year=' + currentYear);
+
   /* formDB 및 Firebase 즉시 반영 */
   if (currentCode) {
     if (!formDB[currentCode]) formDB[currentCode] = collectForm();
@@ -2709,6 +2715,7 @@ function confirmSign() {
     var idx = savedForms.findIndex(function(f){
       return f.code === currentCode && f.period === currentPeriod && (f.year||2026) === currentYear;
     });
+    _dbg.push('idx=' + idx + (idx<0 ? ' (폼 못찾음!)' : ' id=' + savedForms[idx].id));
     if (idx > -1) {
       if (!savedForms[idx].data) savedForms[idx].data = {};
       if (!savedForms[idx].data.signatures) savedForms[idx].data.signatures = {};
@@ -2752,6 +2759,9 @@ function confirmSign() {
             window._allSigs[fid] = saved;
             saveSigs(fid, saved);
             if (savedForms[idx] && savedForms[idx].data) savedForms[idx].data.signatures = saved;
+            _dbg.push('저장경로=signatures/' + fid);
+            _dbg.push('서버 저장결과: cf=' + (saved.cf?'O':'X') + ' i1=' + (saved.i1?'O':'X') + ' i2=' + (saved.i2?'O':'X'));
+            alert('[서명저장 디버그]\n' + _dbg.join('\n'));
             if (saved[savedTarget]) {
               setSaveStatus('ok', '서명 저장 완료 (클라우드 확인됨)');
             } else {
@@ -2766,8 +2776,10 @@ function confirmSign() {
           .catch(function(e){ console.warn('meta 저장 실패:', e.message); });
       } else {
         setSaveStatus('offline', '오프라인 — 서명이 기기에만 저장됨');
+        alert('[서명저장 디버그] 오프라인\n' + _dbg.join('\n'));
       }
     } else {
+      alert('[서명저장 디버그] 폼을 목록에서 못 찾음!\n' + _dbg.join('\n'));
       showToast('⚠️ 먼저 "점검완료" 저장을 한 뒤 서명해야 클라우드에 반영됩니다');
     }
   }
