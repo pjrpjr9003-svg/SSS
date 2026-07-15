@@ -922,7 +922,12 @@ function fbSaveForm(entry) {
     if (data.improvements) patch['data/improvements'] = data.improvements;
     if (typeof data.remarks !== 'undefined') patch['data/remarks'] = data.remarks;
     if (data.meta)         patch['data/meta']         = data.meta;
-    if (data.signatures)   patch['data/signatures']   = data.signatures;
+    /* 서명은 개별 키 경로로만 병합 — 값이 있는 것만 씀 (cf 없는 저장이 기존 cf 삭제 방지) */
+    if (data.signatures) {
+      ['cf','i1','i2'].forEach(function(k){
+        if (data.signatures[k]) patch['data/signatures/' + k] = data.signatures[k];
+      });
+    }
     /* 사진은 항목별 경로로 병합 (다른 사람이 올린 다른 항목 사진 보존) */
     if (dbEntry.photos) {
       Object.keys(dbEntry.photos).forEach(function(iid){
@@ -933,9 +938,13 @@ function fbSaveForm(entry) {
     ref.update(patch)
       .then(function(){
         entry._loadedAt = now;
-        /* 서명은 별도 경로에도 미러 (user/admin 정합) */
-        if (data.signatures && (data.signatures.cf || data.signatures.i1 || data.signatures.i2)) {
-          fbDB.ref('signatures/' + entry.id).update(data.signatures).catch(function(){});
+        /* 서명은 별도 경로에도 개별 키로 미러 (값 있는 것만) */
+        if (data.signatures) {
+          ['cf','i1','i2'].forEach(function(k){
+            if (data.signatures[k]) {
+              fbDB.ref('signatures/' + entry.id + '/' + k).set(data.signatures[k]).catch(function(){});
+            }
+          });
         }
         /* 되읽어 검증 */
         return fbDB.ref('saved_forms/' + entry.id + '/updatedAt').once('value');
@@ -2109,7 +2118,7 @@ function loadForm(code) {
 ===================================================== */
 var LS_SAVED = 'daegi_saved_v1';
 var LS_SIGS = 'daegi_sigs_v1';
-window.APP_VERSION = 'sig-fix-v21-debug';  /* 서명 불러오기 수정본 표식 */
+window.APP_VERSION = 'sig-fix-v22-cfpreserve';  /* 서명 불러오기 수정본 표식 */
 
 function saveSigs(id, sigs) {
   try {
@@ -2175,7 +2184,7 @@ function saveFormToList() {
   var existingId = existing > -1 ? savedForms[existing].id : Date.now();
   /* 기존 저장본의 서명·사진 보존 */
   if (existing > -1) {
-    var prevSavedSigs = (savedForms[existing].data && savedForms[existing].data.signatures) || {};
+    var prevSavedSigs = getSigsFor(savedForms[existing].id) || {};
     if (!d.signatures) d.signatures = {};
     if (!d.signatures.cf && prevSavedSigs.cf) d.signatures.cf = prevSavedSigs.cf;
     if (!d.signatures.i1 && prevSavedSigs.i1) d.signatures.i1 = prevSavedSigs.i1;
@@ -2699,12 +2708,6 @@ function confirmSign() {
   applySignPreview(currentSignTarget, svgStr);
   closeSignModal();
 
-  /* ── 디버그: 저장 경로 추적 (문제 해결 후 제거) ── */
-  var _dbg = [];
-  _dbg.push('대상=' + currentSignTarget);
-  _dbg.push('currentCode=' + currentCode);
-  _dbg.push('currentPeriod=' + currentPeriod + ' year=' + currentYear);
-
   /* formDB 및 Firebase 즉시 반영 */
   if (currentCode) {
     if (!formDB[currentCode]) formDB[currentCode] = collectForm();
@@ -2715,7 +2718,6 @@ function confirmSign() {
     var idx = savedForms.findIndex(function(f){
       return f.code === currentCode && f.period === currentPeriod && (f.year||2026) === currentYear;
     });
-    _dbg.push('idx=' + idx + (idx<0 ? ' (폼 못찾음!)' : ' id=' + savedForms[idx].id));
     if (idx > -1) {
       if (!savedForms[idx].data) savedForms[idx].data = {};
       if (!savedForms[idx].data.signatures) savedForms[idx].data.signatures = {};
@@ -2759,9 +2761,6 @@ function confirmSign() {
             window._allSigs[fid] = saved;
             saveSigs(fid, saved);
             if (savedForms[idx] && savedForms[idx].data) savedForms[idx].data.signatures = saved;
-            _dbg.push('저장경로=signatures/' + fid);
-            _dbg.push('서버 저장결과: cf=' + (saved.cf?'O':'X') + ' i1=' + (saved.i1?'O':'X') + ' i2=' + (saved.i2?'O':'X'));
-            alert('[서명저장 디버그]\n' + _dbg.join('\n'));
             if (saved[savedTarget]) {
               setSaveStatus('ok', '서명 저장 완료 (클라우드 확인됨)');
             } else {
@@ -2776,10 +2775,8 @@ function confirmSign() {
           .catch(function(e){ console.warn('meta 저장 실패:', e.message); });
       } else {
         setSaveStatus('offline', '오프라인 — 서명이 기기에만 저장됨');
-        alert('[서명저장 디버그] 오프라인\n' + _dbg.join('\n'));
       }
     } else {
-      alert('[서명저장 디버그] 폼을 목록에서 못 찾음!\n' + _dbg.join('\n'));
       showToast('⚠️ 먼저 "점검완료" 저장을 한 뒤 서명해야 클라우드에 반영됩니다');
     }
   }

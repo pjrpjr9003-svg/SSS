@@ -795,7 +795,12 @@ function fbSaveForm(entry) {
     if (data.improvements) patch['data/improvements'] = data.improvements;
     if (typeof data.remarks !== 'undefined') patch['data/remarks'] = data.remarks;
     if (data.meta)         patch['data/meta']         = data.meta;
-    if (data.signatures)   patch['data/signatures']   = data.signatures;
+    /* 서명은 개별 키 경로로만 병합 (cf 없는 저장이 기존 cf 삭제 방지) */
+    if (data.signatures) {
+      ['cf','i1','i2'].forEach(function(k){
+        if (data.signatures[k]) patch['data/signatures/' + k] = data.signatures[k];
+      });
+    }
     if (dbEntry.photos) {
       Object.keys(dbEntry.photos).forEach(function(iid){ patch['photos/' + iid] = dbEntry.photos[iid]; });
     }
@@ -803,8 +808,10 @@ function fbSaveForm(entry) {
     fbDB.ref('saved_forms/' + entry.id).update(patch)
       .then(function(){
         entry._loadedAt = now;
-        if (data.signatures && (data.signatures.cf || data.signatures.i1 || data.signatures.i2)) {
-          fbDB.ref('signatures/' + entry.id).update(data.signatures).catch(function(){});
+        if (data.signatures) {
+          ['cf','i1','i2'].forEach(function(k){
+            if (data.signatures[k]) fbDB.ref('signatures/' + entry.id + '/' + k).set(data.signatures[k]).catch(function(){});
+          });
         }
         showToast('✅ 클라우드 저장 완료');
       })
@@ -2110,7 +2117,7 @@ function saveFormToList() {
   var existingId = existing > -1 ? savedForms[existing].id : Date.now();
   /* 기존 저장본의 서명 보존: 관리자가 서명을 비워두지 않은 경우 덮어쓰지 않음 */
   if (existing > -1) {
-    var prevSavedSigs = (savedForms[existing].data && savedForms[existing].data.signatures) || {};
+    var prevSavedSigs = getSigsFor(savedForms[existing].id) || {};
     if (!d.signatures) d.signatures = {};
     if (!d.signatures.cf && prevSavedSigs.cf) d.signatures.cf = prevSavedSigs.cf;
     if (!d.signatures.i1 && prevSavedSigs.i1) d.signatures.i1 = prevSavedSigs.i1;
@@ -3383,7 +3390,7 @@ function populatePeriodOptions() {
 document.addEventListener('DOMContentLoaded', function() {
   try {
     var vb = document.createElement('div');
-    vb.textContent = 'v: sig-fix-v19-prefetch';
+    vb.textContent = 'v: sig-fix-v22-cfpreserve';
     vb.style.cssText = 'position:fixed;bottom:4px;right:6px;z-index:9999;font-size:10px;color:#8296B0;background:rgba(255,255,255,.7);padding:1px 5px;border-radius:6px;pointer-events:none;';
     document.body.appendChild(vb);
   } catch(e){}
