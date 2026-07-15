@@ -2109,7 +2109,7 @@ function loadForm(code) {
 ===================================================== */
 var LS_SAVED = 'daegi_saved_v1';
 var LS_SIGS = 'daegi_sigs_v1';
-window.APP_VERSION = 'sig-fix-v19-prefetch';  /* 서명 불러오기 수정본 표식 */
+window.APP_VERSION = 'sig-fix-v20-sigupdate';  /* 서명 불러오기 수정본 표식 */
 
 function saveSigs(id, sigs) {
   try {
@@ -2735,15 +2735,24 @@ function confirmSign() {
       /* Firebase: 서명 + meta 저장 (결과를 사용자에게 명확히 알림) */
       if (fbDB) {
         var fid = savedForms[idx].id;
-        var sigsToSave = savedForms[idx].data.signatures;
+        var savedTarget = currentSignTarget;
+        var svgForTarget = svgStr;
         setSaveStatus('saving', '서명 저장 중…');
-        fbDB.ref('signatures/' + fid).set(sigsToSave)
+        /* update로 해당 서명만 갱신 (다른 서명 보존 — set은 전체 덮어써서 cf가 지워지던 버그) */
+        var oneSig = {};
+        oneSig[savedTarget] = svgForTarget;
+        fbDB.ref('signatures/' + fid).update(oneSig)
           .then(function(){
             return fbDB.ref('signatures/' + fid).once('value');
           })
           .then(function(snap){
             var saved = snap.val() || {};
-            if (saved[currentSignTarget]) {
+            /* 서버 최신값을 로컬에도 반영 */
+            if (!window._allSigs) window._allSigs = {};
+            window._allSigs[fid] = saved;
+            saveSigs(fid, saved);
+            if (savedForms[idx] && savedForms[idx].data) savedForms[idx].data.signatures = saved;
+            if (saved[savedTarget]) {
               setSaveStatus('ok', '서명 저장 완료 (클라우드 확인됨)');
             } else {
               setSaveStatus('fail', '서명 확인 실패 — 다시 시도하세요');
