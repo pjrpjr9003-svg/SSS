@@ -2242,6 +2242,19 @@ function setSavedPeriod(n) {
 
 function renderSavedList() {
   loadSavedForms();
+  /* 최초 렌더 시 signatures/ 전체를 한 번 읽어 메모리 캐시 채움 (미등록 배지 정확도) */
+  if (fbDB && !window._sigsPrefetched) {
+    window._sigsPrefetched = true;
+    fbDB.ref('signatures').once('value').then(function(snap){
+      var all = snap.val() || {};
+      window._allSigs = all;
+      Object.keys(all).forEach(function(fid){
+        var rs = all[fid];
+        if (rs && (rs.cf || rs.i1 || rs.i2)) saveSigs(fid, rs);
+      });
+      renderSavedList();
+    }).catch(function(e){ console.warn('서명 프리페치 실패:', e.message); });
+  }
   var el = document.getElementById('saved-list');
 
   /* 현재 필터 반기만 */
@@ -3370,7 +3383,7 @@ function populatePeriodOptions() {
 document.addEventListener('DOMContentLoaded', function() {
   try {
     var vb = document.createElement('div');
-    vb.textContent = 'v: sig-fix-v18-sigcache';
+    vb.textContent = 'v: sig-fix-v19-prefetch';
     vb.style.cssText = 'position:fixed;bottom:4px;right:6px;z-index:9999;font-size:10px;color:#8296B0;background:rgba(255,255,255,.7);padding:1px 5px;border-radius:6px;pointer-events:none;';
     document.body.appendChild(vb);
   } catch(e){}

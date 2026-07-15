@@ -2109,7 +2109,7 @@ function loadForm(code) {
 ===================================================== */
 var LS_SAVED = 'daegi_saved_v1';
 var LS_SIGS = 'daegi_sigs_v1';
-window.APP_VERSION = 'sig-fix-v18-sigcache';  /* 서명 불러오기 수정본 표식 */
+window.APP_VERSION = 'sig-fix-v19-prefetch';  /* 서명 불러오기 수정본 표식 */
 
 function saveSigs(id, sigs) {
   try {
@@ -2325,6 +2325,7 @@ function renderSavedList() {
     window._sigsPrefetched = true;
     fbDB.ref('signatures').once('value').then(function(snap){
       var all = snap.val() || {};
+      window._allSigs = all;  /* getSigsFor가 1순위로 읽는 메모리 캐시 채움 */
       Object.keys(all).forEach(function(fid){
         var rs = all[fid];
         if (rs && (rs.cf || rs.i1 || rs.i2)) saveSigs(fid, rs);

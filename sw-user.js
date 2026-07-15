@@ -2,7 +2,7 @@
    Service Worker – 도시대기측정소 점검앱
    오프라인 캐싱 + localStorage 자동 백업
 ===================================================== */
-var CACHE_NAME = 'daegi-user-v18';
+var CACHE_NAME = 'daegi-user-v19';
 var ASSETS = [
   './',
   './user.html',
