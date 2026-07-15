@@ -1104,6 +1104,8 @@ function attachFirebaseListeners() {
     fbDB.ref('signatures').on('value', function(snap) {
       var all = snap.val();
       if (!all) return;
+      /* 전역 메모리 캐시 — 폼 열 때 네트워크 없이 즉시 사용 */
+      window._allSigs = all;
       Object.keys(all).forEach(function(fid) {
         var rs = all[fid];
         if (!rs || !(rs.cf || rs.i1 || rs.i2)) return;
@@ -1120,7 +1122,7 @@ function attachFirebaseListeners() {
       /* 현재 열린 폼에 즉시 반영 */
       var cur = savedForms.find(function(f){ return f.code===currentCode && f.period===currentPeriod; });
       if (cur) {
-        var s = loadSigs(cur.id) || (cur.data && cur.data.signatures) || {};
+        var s = getSigsFor(cur.id);
         if (!signatureData.cf && s.cf) { signatureData.cf = s.cf; applySignPreview('cf', s.cf); }
         if (!signatureData.i1 && s.i1) { signatureData.i1 = s.i1; applySignPreview('i1', s.i1); }
         if (!signatureData.i2 && s.i2) { signatureData.i2 = s.i2; applySignPreview('i2', s.i2); }
@@ -2107,7 +2109,7 @@ function loadForm(code) {
 ===================================================== */
 var LS_SAVED = 'daegi_saved_v1';
 var LS_SIGS = 'daegi_sigs_v1';
-window.APP_VERSION = 'sig-fix-v17-concurrent';  /* 서명 불러오기 수정본 표식 */
+window.APP_VERSION = 'sig-fix-v18-sigcache';  /* 서명 불러오기 수정본 표식 */
 
 function saveSigs(id, sigs) {
   try {
@@ -2120,6 +2122,20 @@ function saveSigs(id, sigs) {
 
 function loadSigs(id) {
   try { return (JSON.parse(localStorage.getItem(LS_SIGS)||'{}')||{})[id] || null; } catch(e){ return null; }
+}
+
+/* 통합 서명 조회 — 메모리 캐시(_allSigs) → 로컬 캐시 → savedForms 순, 항상 즉시 반환 */
+function getSigsFor(id) {
+  var out = { cf:null, i1:null, i2:null };
+  var mem = (window._allSigs && (window._allSigs[id] || window._allSigs[String(id)])) || null;
+  var loc = loadSigs(id) || null;
+  var frm = null;
+  var f = savedForms.find(function(x){ return x.id == id; });
+  if (f && f.data && f.data.signatures) frm = f.data.signatures;
+  ['cf','i1','i2'].forEach(function(k){
+    out[k] = (mem && mem[k]) || (loc && loc[k]) || (frm && frm[k]) || null;
+  });
+  return out;
 }
 
 function loadAllSigs() {
@@ -2360,9 +2376,8 @@ function _renderSavedItems(el, filtered) {
         '<span style="background:rgba(255,255,255,.2);border-radius:10px;padding:1px 8px;font-size:10px;">'+items.length+'개소</span>'+
       '</div>';
     items.forEach(function(f) {
-      var sigs = f.data && f.data.signatures;
-      var _sigCache = loadSigs(f.id) || {};
-      var hasCf = !!((sigs && sigs.cf) || _sigCache.cf);
+      var _fsig = getSigsFor(f.id);
+      var hasCf = !!_fsig.cf;
       var cfBadge = hasCf
         ? '<span style="background:#E8F5E9;color:#27AE60;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">✅ 확인자 서명</span>'
         : '<span style="background:#FFF3E0;color:#E67E22;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">⚠️ 서명미등록</span>';
@@ -2388,14 +2403,8 @@ function openUserSignMode(formId) {
   formDB[f.code]=JSON.parse(JSON.stringify(f.data));
   if(f.photos){Object.keys(f.photos).forEach(function(k){if(!formDB[f.code].photos)formDB[f.code].photos={};formDB[f.code].photos[k]=f.photos[k];});}
 
-  /* ── 서명 주입: 저장된 서명 + 서명캐시(LS_SIGS) + SETTINGS 명단 서명 병합 ── */
-  var _fSigs = f.data.signatures || {};
-  var _cSigs = loadSigs(f.id) || {};
-  signatureData = {
-    cf: _fSigs.cf || _cSigs.cf || null,
-    i1: _fSigs.i1 || _cSigs.i1 || null,
-    i2: _fSigs.i2 || _cSigs.i2 || null
-  };
+  /* ── 서명 주입: 통합 캐시(메모리→로컬→폼)에서 즉시 조회 ── */
+  signatureData = getSigsFor(f.id);
 
   /* SETTINGS 확인자 → cf 서명·meta 자동 적용 */
   var cfPerson = SETTINGS.inspectors.find(function(p){ return p.role==='confirmer'; });
@@ -2430,11 +2439,13 @@ function openUserSignMode(formId) {
   if (signDoneBtn) signDoneBtn.style.display = '';
   showPage('form');
 
-  /* Firebase signatures/{id}에서 직접 읽어 빈 서명 채움 (리스너 타이밍 무관) */
-  if (fbDB) {
+  /* fallback: 캐시에 아직 없으면 Firebase에서 직접 읽어 채움 */
+  if (fbDB && !(signatureData.cf || signatureData.i1 || signatureData.i2)) {
     fbDB.ref('signatures/' + formId).once('value').then(function(snap){
       var rs = snap.val();
       if (!rs) return;
+      if (!window._allSigs) window._allSigs = {};
+      window._allSigs[formId] = rs;
       saveSigs(formId, rs);
       ['cf','i1','i2'].forEach(function(k){
         if (!signatureData[k] && rs[k]) {
@@ -2467,21 +2478,16 @@ function loadSavedForm(formId) {
   }
   buildCheckSections(); /* 레이아웃 변경사항 항상 반영 */
   loadForm(f.code);
-  /* loadForm 이후 서명·성명·직급 복원 */
-  var _lc = loadSigs(f.id) || {};
-  var _rs = (f.data && f.data.signatures) ? f.data.signatures : {};
-  /* 캐시 우선, 원격값은 실제 값이 있을 때만 (null이 정상 서명 덮어쓰기 방지) */
-  var _lm = {
-    cf: _lc.cf || _rs.cf || null,
-    i1: _lc.i1 || _rs.i1 || null,
-    i2: _lc.i2 || _rs.i2 || null
-  };
+  /* loadForm 이후 서명·성명·직급 복원 — 통합 캐시에서 즉시 조회 */
+  var _lm = getSigsFor(f.id);
   applyInspectorMeta(f.data.meta, _lm);
-  /* Firebase signatures/{id}에서 직접 읽어 빈 서명 보강 */
-  if (fbDB) {
+  /* fallback: 캐시에 없으면 Firebase에서 직접 읽어 보강 */
+  if (fbDB && !(_lm.cf || _lm.i1 || _lm.i2)) {
     fbDB.ref('signatures/' + f.id).once('value').then(function(snap){
       var rs = snap.val();
       if (!rs) return;
+      if (!window._allSigs) window._allSigs = {};
+      window._allSigs[f.id] = rs;
       saveSigs(f.id, rs);
       ['cf','i1','i2'].forEach(function(k){
         if (!signatureData[k] && rs[k]) {

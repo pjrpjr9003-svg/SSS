@@ -942,6 +942,7 @@ function attachFirebaseListeners() {
     fbDB.ref('signatures').on('value', function(snap) {
       var all = snap.val();
       if (!all) return;
+      window._allSigs = all;
       Object.keys(all).forEach(function(fid) {
         var rs = all[fid];
         if (!rs || !(rs.cf || rs.i1 || rs.i2)) return;
@@ -955,7 +956,7 @@ function attachFirebaseListeners() {
       });
       var cur = savedForms.find(function(f){ return f.code===currentCode && f.period===currentPeriod; });
       if (cur) {
-        var s = loadSigs(cur.id) || (cur.data && cur.data.signatures) || {};
+        var s = getSigsFor(cur.id);
         if (!signatureData.cf && s.cf) { signatureData.cf = s.cf; applySignPreview('cf', s.cf); }
         if (!signatureData.i1 && s.i1) { signatureData.i1 = s.i1; applySignPreview('i1', s.i1); }
         if (!signatureData.i2 && s.i2) { signatureData.i2 = s.i2; applySignPreview('i2', s.i2); }
@@ -2271,8 +2272,8 @@ function renderSavedList() {
         '<span style="background:rgba(255,255,255,.2);border-radius:10px;padding:1px 8px;font-size:10px;">'+items.length+'개소</span>'+
       '</div>';
     items.forEach(function(f) {
-      var _sigCache = loadSigs(f.id) || {};
-      var hasCfSign = !!((f.data && f.data.signatures && f.data.signatures.cf) || _sigCache.cf);
+      var _fsig = getSigsFor(f.id);
+      var hasCfSign = !!_fsig.cf;
       var cfBadge = hasCfSign
         ? '<span style="background:#E8F5E9;color:#27AE60;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;">✅ 확인자 서명</span>'
         : '<span style="background:#FFF3E0;color:#E67E22;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;">⚠️ 서명미등록</span>';
@@ -2306,15 +2307,8 @@ function loadSavedForm(formId) {
   }
   buildCheckSections(); /* 레이아웃 변경사항 항상 반영 */
   loadForm(f.code);
-  /* loadForm 이후에 서명/점검자 복원 — loadSigs 캐시 우선 사용 */
-  var _cachedSigs = loadSigs(f.id) || {};
-  var _remoteSigs = (f.data && f.data.signatures) ? f.data.signatures : {};
-  /* 캐시를 기본으로, 원격값은 실제 값이 있을 때만 채움 (null이 정상 서명 덮어쓰기 방지) */
-  var _mergedSigs = {
-    cf: _cachedSigs.cf || _remoteSigs.cf || null,
-    i1: _cachedSigs.i1 || _remoteSigs.i1 || null,
-    i2: _cachedSigs.i2 || _remoteSigs.i2 || null
-  };
+  /* loadForm 이후에 서명/점검자 복원 — 통합 캐시에서 즉시 조회 */
+  var _mergedSigs = getSigsFor(f.id);
   applyInspectorMeta(f.data.meta, _mergedSigs);
   ['sec1','sec2','sec3'].forEach(function(sid){
     var b=document.getElementById('body-'+sid),a=document.getElementById('arrow-'+sid);
@@ -2405,8 +2399,9 @@ function exportSavedPdf(formId) {
     if (!fData.meta.cfr && cfP.rank) fData.meta.cfr = cfP.rank;
     if (!fData.meta.cfo && cfP.org)  fData.meta.cfo = cfP.org;
   }
-  /* 점검자 서명: loadSigs 캐시 우선 → 없으면 SETTINGS fallback */
-  var _expSigsCache = loadSigs(f.id) || {};
+  /* 점검자 서명: 통합 캐시 우선 → 없으면 SETTINGS fallback */
+  var _expSigsCache = getSigsFor(f.id);
+  if (_expSigsCache.cf && !fSigs.cf) fSigs.cf = _expSigsCache.cf;
   ['i1','i2'].forEach(function(key) {
     if (_expSigsCache[key]) { fSigs[key] = _expSigsCache[key]; return; }
     var savedName = fData.meta[key+'n'];
@@ -2845,6 +2840,20 @@ function loadSigs(id) {
     var all = JSON.parse(localStorage.getItem(LS_SIGS)||'{}');
     return all[id] || null;
   } catch(e){ return null; }
+}
+
+/* 통합 서명 조회 — 메모리 캐시(_allSigs) → 로컬 캐시 → savedForms 순, 항상 즉시 반환 */
+function getSigsFor(id) {
+  var out = { cf:null, i1:null, i2:null };
+  var mem = (window._allSigs && (window._allSigs[id] || window._allSigs[String(id)])) || null;
+  var loc = loadSigs(id) || null;
+  var frm = null;
+  var f = savedForms.find(function(x){ return x.id == id; });
+  if (f && f.data && f.data.signatures) frm = f.data.signatures;
+  ['cf','i1','i2'].forEach(function(k){
+    out[k] = (mem && mem[k]) || (loc && loc[k]) || (frm && frm[k]) || null;
+  });
+  return out;
 }
 
 function loadAllSigs() {
@@ -3359,6 +3368,12 @@ function populatePeriodOptions() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  try {
+    var vb = document.createElement('div');
+    vb.textContent = 'v: sig-fix-v18-sigcache';
+    vb.style.cssText = 'position:fixed;bottom:4px;right:6px;z-index:9999;font-size:10px;color:#8296B0;background:rgba(255,255,255,.7);padding:1px 5px;border-radius:6px;pointer-events:none;';
+    document.body.appendChild(vb);
+  } catch(e){}
   populatePeriodOptions();
   initFirebase();
   persistLoad();
