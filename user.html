@@ -1825,6 +1825,13 @@ function buildItem(item, rid) {
         '<span class="gas-unit">'+unit+'</span>'+
         '<button type="button" onclick="(function(r,v){pickRadio(r,v)})(\''+gRid+'\',\'양호\')" class="r-btn r-btn-sm" id="rbtn-ok-'+gRid+'">✓ 양호</button>'+
         '<button type="button" onclick="(function(r,v){pickRadio(r,v)})(\''+gRid+'\',\'미흡\')" class="r-btn r-btn-sm" id="rbtn-ng-'+gRid+'">✗ 미흡</button>'+
+      '</div>'+
+      /* 가스별 미흡 사진 zone */
+      '<div class="photo-zone" id="photo-zone-'+gRid+'" style="display:none;margin-left:14px;">'+
+        '<div class="photo-zone-label">📷 '+gn+' 미흡 사진 첨부</div>'+
+        '<div class="photo-grid" id="photo-grid-'+gRid+'"></div>'+
+        '<button class="photo-add-btn" onclick="triggerPhotoAdd(\''+gRid+'\')">＋ 갤러리에서 사진 선택</button>'+
+        '<textarea class="improvement-input" id="improve-'+gRid+'" placeholder="개선 사항을 입력하세요..."></textarea>'+
       '</div>';
     });
     gasHtml += '</div>';
@@ -1888,7 +1895,7 @@ function pickRadio(rid, val, _noToggle) {
       if (currentCode && formDB[currentCode] && formDB[currentCode].radios) {
         delete formDB[currentCode].radios[rid];
       }
-      if (!rid.includes('_off') && !rid.includes('_gas_')) {
+      if (!rid.includes('_off')) {
         var wrap0 = document.getElementById('item-wrap-'+rid);
         if (wrap0) wrap0.classList.remove('ng-highlight');
         var zone0 = document.getElementById('photo-zone-'+rid);
@@ -1920,10 +1927,9 @@ function pickRadio(rid, val, _noToggle) {
   if (!rid.includes('_off')) {
     var wrap = document.getElementById('item-wrap-'+rid);
     if (wrap) wrap.classList.toggle('ng-highlight', val==='미흡');
-    if (!rid.includes('_gas_')) {
-      var zone = document.getElementById('photo-zone-'+rid);
-      if (zone) zone.style.display = (val==='미흡') ? 'block' : 'none';
-    }
+    /* 일반 항목과 가스 항목 모두 사진 zone 표시 */
+    var zone = document.getElementById('photo-zone-'+rid);
+    if (zone) zone.style.display = (val==='미흡') ? 'block' : 'none';
   }
   updateProgress();
   updateCheckProgress();
@@ -2118,7 +2124,7 @@ function loadForm(code) {
 ===================================================== */
 var LS_SAVED = 'daegi_saved_v1';
 var LS_SIGS = 'daegi_sigs_v1';
-window.APP_VERSION = 'sig-fix-v22-cfpreserve';  /* 서명 불러오기 수정본 표식 */
+window.APP_VERSION = 'sig-fix-v23-gasphoto';  /* 서명 불러오기 수정본 표식 */
 
 function saveSigs(id, sigs) {
   try {
@@ -3324,7 +3330,18 @@ function doExcelSingle(_overrideData, _overrideSigs) {
   [{sid:'sec1',items:SEC1,label:'1'},{sid:'sec2',items:SEC2,label:'2'},{sid:'sec3',items:SEC3,label:'3'}].forEach(function(sd){
     sd.items.forEach(function(item,ii){
       var iid=sd.sid+'_'+ii;
-      if(((d.radios||{})[iid]||'')==='미흡'){
+      if(item.g){
+        /* 제로교정: 가스별로 미흡 수집 */
+        item.g.forEach(function(gn, gi){
+          var gRid=iid+'_gas_'+gi;
+          if(((d.radios||{})[gRid]||'')==='미흡'){
+            ngItems.push({label:sd.label+' - '+item.n, text:item.t+' ('+gn+')',
+              note:(d.notes||{})['note-'+gRid]||'',
+              improvement:(d.improvements||{})['improve-'+gRid]||'',
+              photos:(d.photos&&d.photos[gRid])?d.photos[gRid]:[]});
+          }
+        });
+      } else if(((d.radios||{})[iid]||'')==='미흡'){
         ngItems.push({label:sd.label+' - '+item.n, text:item.t, note:(d.notes||{})['note-'+iid]||'',
           improvement:(d.improvements||{})['improve-'+iid]||'',
           photos:(d.photos&&d.photos[iid])?d.photos[iid]:[]});

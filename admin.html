@@ -1731,6 +1731,12 @@ function buildItem(item, rid) {
         '<span class="gas-unit">'+unit+'</span>'+
         '<label class="r-btn r-btn-sm" id="rbtn-ok-'+gRid+'" data-rid="'+gRid+'" data-val="양호"><input type="radio" name="'+gRid+'" value="양호">✓ 양호</label>'+
         '<label class="r-btn r-btn-sm" id="rbtn-ng-'+gRid+'" data-rid="'+gRid+'" data-val="미흡"><input type="radio" name="'+gRid+'" value="미흡">✗ 미흡</label>'+
+      '</div>'+
+      '<div class="photo-zone" id="photo-zone-'+gRid+'" style="display:none;margin-left:14px;">'+
+        '<div class="photo-zone-label">📷 '+gn+' 미흡 사진 첨부</div>'+
+        '<div class="photo-grid" id="photo-grid-'+gRid+'"></div>'+
+        '<button class="photo-add-btn" onclick="triggerPhotoAdd(\''+gRid+'\')">＋ 갤러리에서 사진 선택</button>'+
+        '<textarea class="improvement-input" id="improve-'+gRid+'" placeholder="개선 사항을 입력하세요..."></textarea>'+
       '</div>';
     });
     gasHtml += '</div>';
@@ -1817,7 +1823,7 @@ function pickRadio(rid, val, _noToggle) {
       if (currentCode && formDB[currentCode] && formDB[currentCode].radios) {
         delete formDB[currentCode].radios[rid];
       }
-      if (!rid.includes('_off') && !rid.includes('_gas_')) {
+      if (!rid.includes('_off')) {
         var wrap0 = document.getElementById('item-wrap-'+rid);
         if (wrap0) wrap0.classList.remove('ng-highlight');
         var zone0 = document.getElementById('photo-zone-'+rid);
@@ -1850,10 +1856,8 @@ function pickRadio(rid, val, _noToggle) {
   if (!rid.includes('_off')) {
     var wrap = document.getElementById('item-wrap-'+rid);
     if (wrap) wrap.classList.toggle('ng-highlight', val==='미흡');
-    if (!rid.includes('_gas_')) {
-      var zone = document.getElementById('photo-zone-'+rid);
-      if (zone) zone.style.display = (val==='미흡') ? 'block' : 'none';
-    }
+    var zone = document.getElementById('photo-zone-'+rid);
+    if (zone) zone.style.display = (val==='미흡') ? 'block' : 'none';
   }
   updateProgress();
   updateCheckProgress();
@@ -3214,7 +3218,17 @@ function doExcelSingle(_overrideData, _overrideSigs) {
   [{sid:'sec1',items:SEC1,label:'1'},{sid:'sec2',items:SEC2,label:'2'},{sid:'sec3',items:SEC3,label:'3'}].forEach(function(sd){
     sd.items.forEach(function(item,ii){
       var iid=sd.sid+'_'+ii;
-      if(((d.radios||{})[iid]||'')==='미흡'){
+      if(item.g){
+        item.g.forEach(function(gn, gi){
+          var gRid=iid+'_gas_'+gi;
+          if(((d.radios||{})[gRid]||'')==='미흡'){
+            ngItems.push({label:sd.label+' - '+item.n, text:item.t+' ('+gn+')',
+              note:(d.notes||{})['note-'+gRid]||'',
+              improvement:(d.improvements||{})['improve-'+gRid]||'',
+              photos:(d.photos&&d.photos[gRid])?d.photos[gRid]:[]});
+          }
+        });
+      } else if(((d.radios||{})[iid]||'')==='미흡'){
         ngItems.push({label:sd.label+' - '+item.n, text:item.t, note:(d.notes||{})['note-'+iid]||'',
           improvement:(d.improvements||{})['improve-'+iid]||'',
           photos:(d.photos&&d.photos[iid])?d.photos[iid]:[]});
@@ -3390,7 +3404,7 @@ function populatePeriodOptions() {
 document.addEventListener('DOMContentLoaded', function() {
   try {
     var vb = document.createElement('div');
-    vb.textContent = 'v: sig-fix-v22-cfpreserve';
+    vb.textContent = 'v: sig-fix-v23-gasphoto';
     vb.style.cssText = 'position:fixed;bottom:4px;right:6px;z-index:9999;font-size:10px;color:#8296B0;background:rgba(255,255,255,.7);padding:1px 5px;border-radius:6px;pointer-events:none;';
     document.body.appendChild(vb);
   } catch(e){}
