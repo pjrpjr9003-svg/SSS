@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="대기측정 점검">
+<meta name="theme-color" content="#0C2D4E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>도시대기측정소 점검</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+  height: 100%; min-height: 100dvh;
+  font-family: -apple-system, 'Apple SD Gothic Neo', Arial, sans-serif;
+  background: linear-gradient(160deg, #0C2D4E 0%, #0A3D6B 60%, #0E2540 100%);
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px 24px;
+}
+.logo-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 44px;
+}
+.logo-icon {
+  width: 132px; height: 132px;
+  background: #fff;
+  border-radius: 24px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 10px 36px rgba(0,0,0,.24);
+}
+.logo-icon img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.logo-title { font-size: 21px; font-weight: 800; color: #fff; text-align: center; line-height: 1.4; }
+.logo-sub   { font-size: 12px; color: rgba(255,255,255,.45); margin-top: 6px; text-align: center; }
+
+.mode-cards { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 14px; }
+
+.mode-card {
+  background: rgba(255,255,255,.08);
+  border: 1.5px solid rgba(255,255,255,.14);
+  border-radius: 18px; padding: 22px 20px;
+  cursor: pointer; display: flex; align-items: center; gap: 16px;
+  transition: transform .12s, background .15s;
+  text-decoration: none;
+}
+.mode-card:active { transform: scale(.97); background: rgba(255,255,255,.14); }
+.mode-card.admin  { border-color: rgba(59,141,232,.45); background: rgba(20,82,160,.22); }
+.mode-card.admin:active { background: rgba(20,82,160,.38); }
+
+.mode-icon {
+  width: 54px; height: 54px; border-radius: 15px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; flex-shrink: 0;
+}
+.mode-icon.a { background: linear-gradient(135deg,#1452A0,#3B8DE8); }
+.mode-icon.u { background: linear-gradient(135deg,#0E7C6E,#27AE60); }
+
+.mode-info { flex: 1; }
+.mode-name { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 5px; }
+.mode-desc { font-size: 12px; color: rgba(255,255,255,.52); line-height: 1.55; }
+.mode-arrow { font-size: 22px; color: rgba(255,255,255,.28); }
+
+/* 비밀번호 모달 */
+.pw-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.58);
+  z-index: 500; display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.pw-overlay.open { opacity: 1; pointer-events: all; }
+.pw-sheet {
+  background: #fff; border-radius: 22px 22px 0 0; width: 100%;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  transform: translateY(100%);
+  transition: transform .3s cubic-bezier(.32,1,.6,1);
+}
+.pw-overlay.open .pw-sheet { transform: translateY(0); }
+.pw-handle { width: 36px; height: 4px; background: #D0DDEF; border-radius: 2px; margin: 12px auto 0; }
+.pw-head { padding: 18px 22px 10px; }
+.pw-title { font-size: 19px; font-weight: 800; color: #0C2D4E; }
+.pw-sub   { font-size: 13px; color: #8296B0; margin-top: 5px; }
+.pw-body  { padding: 14px 22px 0; }
+.pw-input {
+  width: 100%; padding: 15px; font-size: 22px;
+  border: 2px solid #D0DDEF; border-radius: 13px;
+  outline: none; font-family: inherit; letter-spacing: 6px;
+  text-align: center; color: #0C2D4E;
+  transition: border-color .15s;
+}
+.pw-input:focus { border-color: #3B8DE8; box-shadow: 0 0 0 3px rgba(59,141,232,.12); }
+.pw-input.err   { border-color: #E74C3C; animation: shake .35s; }
+.pw-error-msg   { font-size: 12px; color: #E74C3C; text-align: center; margin-top: 9px; min-height: 18px; }
+.pw-actions { display: flex; gap: 10px; padding: 16px 22px 26px; }
+.pw-btn { flex:1; padding:14px; border-radius:13px; border:none; font-size:15px; font-weight:700; cursor:pointer; }
+.pw-btn.cancel  { background:#F0F4FA; color:#8296B0; }
+.pw-btn.confirm { background:#1452A0; color:#fff; }
+
+@keyframes shake {
+  0%,100%{ transform:translateX(0); }
+  20%    { transform:translateX(-8px); }
+  40%    { transform:translateX(8px); }
+  60%    { transform:translateX(-5px); }
+  80%    { transform:translateX(5px); }
+}
+
+.foot { position:fixed; bottom:max(14px,env(safe-area-inset-bottom,14px)); font-size:11px; color:rgba(255,255,255,.22); }
+</style>
+</head>
+<body>
+
+<div class="logo-wrap">
+  <div class="logo-icon"><img src="icon-512.png" alt="도시대기측정소 점검"></div>
+</div>
+
+<div class="mode-cards">
+
+  <div class="mode-card admin" onclick="openAdminPw()">
+    <div class="mode-icon a">🔐</div>
+    <div class="mode-info">
+      <div class="mode-name">관리자 모드</div>
+      <div class="mode-desc">점검 항목 입력·편집, 사진 첨부<br>전체 데이터 저장 및 내보내기</div><div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,.4);">👉 admin.html 북마크 후 홈화면 추가</div>
+    </div>
+    <div class="mode-arrow">›</div>
+  </div>
+
+  <a class="mode-card" href="user.html">
+    <div class="mode-icon u">✍️</div>
+    <div class="mode-info">
+      <div class="mode-name">확인자 모드</div>
+      <div class="mode-desc">점검표 열람, 서명 입력 및<br>PDF 다운로드만 가능</div><div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,.4);">👉 user.html 북마크 후 홈화면 추가</div>
+    </div>
+    <div class="mode-arrow">›</div>
+  </a>
+
+</div>
+
+<!-- 관리자 비밀번호 모달 -->
+<div class="pw-overlay" id="pw-overlay">
+  <div class="pw-sheet">
+    <div class="pw-handle"></div>
+    <div class="pw-head">
+      <div class="pw-title">🔐 관리자 인증</div>
+      <div class="pw-sub">관리자 비밀번호를 입력해 주세요</div>
+    </div>
+    <div class="pw-body">
+      <input class="pw-input" type="password" id="pw-input"
+             placeholder="••••" maxlength="20"
+             onkeydown="if(event.key==='Enter')checkPw()">
+      <div class="pw-error-msg" id="pw-err"></div>
+    </div>
+    <div class="pw-actions">
+      <button class="pw-btn cancel" onclick="closePw()">취소</button>
+      <button class="pw-btn confirm" onclick="checkPw()">확인</button>
+    </div>
+  </div>
+</div>
+
+<div class="foot">v2.0 · PWA</div>
+
+<script>
+/* ─── 관리자 비밀번호 (이 값을 변경하세요) ─── */
+var ADMIN_PW = '1234';
+
+function openAdminPw() {
+  document.getElementById('pw-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(function(){ document.getElementById('pw-input').focus(); }, 300);
+}
+function closePw() {
+  document.getElementById('pw-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  document.getElementById('pw-input').value = '';
+  document.getElementById('pw-err').textContent = '';
+}
+function checkPw() {
+  var v = document.getElementById('pw-input').value;
+  if (v === ADMIN_PW) {
+    window.location.href = 'admin.html';
+  } else {
+    var inp = document.getElementById('pw-input');
+    inp.classList.add('err');
+    document.getElementById('pw-err').textContent = '비밀번호가 올바르지 않습니다';
+    setTimeout(function(){ inp.classList.remove('err'); }, 400);
+    inp.value = '';
+  }
+}
+document.getElementById('pw-overlay').addEventListener('click', function(e){
+  if (e.target === this) closePw();
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js');
+  });
+}
+</script>
+</body>
+</html>

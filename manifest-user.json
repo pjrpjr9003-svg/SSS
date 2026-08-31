@@ -1,0 +1,15 @@
+{
+  "name": "도시대기측정소 점검 (사용자)",
+  "short_name": "점검 사용자",
+  "description": "강원특별자치도 도시대기측정소 점검 - 사용자용",
+  "start_url": "./user.html",
+  "display": "standalone",
+  "background_color": "#0C2D4E",
+  "theme_color": "#0E7C6E",
+  "orientation": "portrait",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon-user-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-user-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
